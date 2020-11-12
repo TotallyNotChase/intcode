@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 28f9151ecfb376979dee26f750619f5dfd8f942609508d7eea104adf17006f4d
+-- hash: a7133a4a1d4c0d7ad2a94c0ff6587794927ad2263b199d632715e8943d3307c9
 
 name:           intcode
 version:        0.1.7
@@ -14,7 +14,7 @@ bug-reports:    https://github.com/TotallyNotChase/intcode/issues
 author:         Chase
 maintainer:     totallynotchase42@gmail.com
 copyright:      TotallyNotChase
-license:        BSD3
+license:        MIT
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
