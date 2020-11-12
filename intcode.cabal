@@ -1,0 +1,54 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 28f9151ecfb376979dee26f750619f5dfd8f942609508d7eea104adf17006f4d
+
+name:           intcode
+version:        0.1.7
+description:    Please see the README on GitHub at <https://github.com/TotallyNotChase/intcode#readme>
+homepage:       https://github.com/TotallyNotChase/intcode#readme
+bug-reports:    https://github.com/TotallyNotChase/intcode/issues
+author:         Chase
+maintainer:     totallynotchase42@gmail.com
+copyright:      TotallyNotChase
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+
+source-repository head
+  type: git
+  location: https://github.com/TotallyNotChase/intcode
+
+library
+  exposed-modules:
+      IntCode
+  other-modules:
+      Utils
+      Paths_intcode
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -O3
+  build-depends:
+      array
+    , base >=4.7 && <5
+  default-language: Haskell2010
+
+test-suite intcode-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      TestUtils
+      Paths_intcode
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      array
+    , base >=4.7 && <5
+    , intcode
+  default-language: Haskell2010

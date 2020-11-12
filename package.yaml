@@ -1,0 +1,36 @@
+name:                intcode
+version:             0.1.7
+github:              "TotallyNotChase/intcode"
+license:             BSD3
+author:              "Chase"
+maintainer:          "totallynotchase42@gmail.com"
+copyright:           "TotallyNotChase"
+
+extra-source-files:
+- README.md
+
+description:         Please see the README on GitHub at <https://github.com/TotallyNotChase/intcode#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- array
+
+ghc-options:
+- -Wall
+
+library:
+  source-dirs: src
+  exposed-modules: IntCode
+  ghc-options:
+  - -O3
+
+tests:
+  intcode-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - intcode
