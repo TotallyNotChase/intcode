@@ -1,26 +1,88 @@
 module IntCode
     (
-        IntCode, constructArray,
-        executeOp, parseOp,
-        runMachine, getOutput
+        IntMachine,
+        constructMachine, runMachine,
+        getOutput, readMem, writeMem
     ) where
 
-import Control.Monad ( when )
+import Data.Maybe ( fromMaybe )
 import Data.Array.IO
     ( IOArray, newListArray, readArray, writeArray )
+import qualified Data.IntMap as Map
 
 import Utils ( digits, padR )
 
--- | The IntCode machine - a mutable IO array
-type IntCode = IOArray Int Int
 
--- | Construct an IntCode from a list of ints
-constructArray :: [Int] -> IO (IOArray Int Int)
-constructArray l = newListArray (0, length l - 1) l
+-- | The IntCode program itself - a mutable array
+type Program = IOArray Int Int
 
--- | Get the output of the mutated IntCode machine - i.e the value at index 0
-getOutput :: IOArray Int Int -> IO Int
-getOutput = flip readArray 0
+{-|
+Memory outside of the intcode program - represents infinite memory using lazy map
+All memory indices surpassing the length of the program itself are initialized to 0
+This means - only the memory indices modified by the program should be kept track of
+So, if the program tries to write to a index out of bound - store it in the map
+Whenever, the program tries to read from an index out of bound - check if it exists in the map
+If it does exist, return the value stored, otherwise - it's just 0 - the unmodified default
+-}
+type Memory = Map.IntMap Int
+
+{-|
+The IntCode Machine - contains the actual program + relevant info about itself
+This data structue itself is not mutable
+A new version, with the necessary fields updated, is returned per recursion step
+However, the intCode array itself is mutable - just to avoid extreme inefficiency
+The oobMem Map is still immutable - mostly because this doesn't need access a whole lot
+-}
+data IntMachine =
+    IntMachine { insPtr     :: Int      {- The instruction pointer -}
+               , relBasePtr :: Int      {- The relative base pointer -}
+               , programLen :: Int      {- Length of the intcode program (puzzle input) -}
+               , intCode    :: Program  {- The actual intcode program (puzzle input) -}
+               , oobMem     :: Memory   {- Memory outside of the intcode program - representing infinite memory -}
+               }
+
+-- | Construct an IntCode machine from a list of ints
+constructMachine :: [Int] -> IO IntMachine
+constructMachine l = do
+    mutArr <- newListArray (0, lenArr - 1) l
+    return $
+        IntMachine { insPtr=0
+                   , relBasePtr=0
+                   , programLen=lenArr
+                   , intCode=mutArr
+                   , oobMem=Map.empty
+                   }
+    where
+        lenArr = length l
+
+-- | Get the output of the mutated IntCode machine - i.e the value at index 0 of the program
+getOutput :: IntMachine -> IO Int
+getOutput = flip readArray 0 . intCode
+
+-- | Read value of memory index - considers both the intcode program itself and the infinite memory band
+readMem :: IntMachine -> Int -> IO Int
+readMem mach i =
+    if i < programLen mach
+    -- If index is within bounds of the intcode program - get the value from there
+    then flip readArray i . intCode $ mach
+    -- Othewise, try to find the value in the oobMem map
+    -- If that index is not found in the map - it means it is unmodified (i.e 0 by default)
+    else return $ fromMaybe 0 . Map.lookup i . oobMem $ mach
+
+-- | Write value to memory index - considers both the intcode program itself and the infinite memory band
+writeMem :: IntMachine -> Int -> Int -> IO IntMachine
+writeMem mach i e = 
+    if i < programLen mach
+    -- If index is within bounds of the intcode program - mutate the array
+    -- Return the same mach - since the IOArray has been modified internally
+    then writeArray (intCode mach) i e >> return mach
+    -- Othewise, insert the value in the oobMem map
+    -- Construct a new machine and return it - still has the same mutable array though
+    else return mach { oobMem = Map.insert i e (oobMem mach) }
+
+-- | Read the instruction given by the instruction pointer
+readIns :: IntMachine -> IO Int
+readIns mach = readArray (intCode mach) (insPtr mach)
 
 {-|
 Mutate the IntCode machine by running
@@ -32,20 +94,16 @@ a result, mutates the IntCode passed
 After this function succeeds - the IntCode passed
 will be mutated accordingly
 -}
-runMachine :: IntCode -> Int -> Int -> IO ()
-runMachine mutArr arrLen i =
-    -- Make sure we are in bounds
-    when (i < arrLen) $
-        -- Read the instruction
-        -- If it is 99, halt - otherwise execute op and continue
-        readArray mutArr i >>=
-            -- Just a flipped version of when to allow monadic composition
-            flip when (
-                    -- Execute the opcode and move to the instruction index returned
-                    executeOp mutArr i >>= runMachine mutArr arrLen
-                )
-                -- Compare the readArray result to 99
-                . (/=99)
+runMachine :: IntMachine -> IO IntMachine
+runMachine mach = do
+    -- Read the instruction
+    -- If it is 99, halt - otherwise execute op and continue
+    ins <- readIns mach
+    if ins /=99
+    -- Execute the opcode and continue using the modified machine returned
+    then executeOp mach >>= runMachine
+    -- Encountered 99 - halt and return machine
+    else return mach
 
 
 {-|
@@ -61,10 +119,10 @@ This mutates the array accordingly
 
 The result returned is the next instruction index
 -}
-executeOp :: IntCode -> Int -> IO Int
-executeOp mutArr opIx = do
+executeOp :: IntMachine -> IO IntMachine
+executeOp mach = do
     -- Read the instruction - which is a number with param modes and opcode grouped up
-    opGrp <- readArray mutArr opIx
+    opGrp <- readArray (intCode mach) (insPtr mach)
     -- Parse the op group into opcode and operand modes
     let (opcode, oprnd1Mode, oprnd2Mode) = parseOp opGrp
     -- Execute the opcode, using the operands and their respective modes
@@ -78,17 +136,19 @@ executeOp mutArr opIx = do
             -}
                 -- Read the operands according to modes (but force mode 1 on third operand since that's output index)
                 [oprnd1, oprnd2, oprnd3] <- sequence [readFstOperand oprnd1Mode, readSndOperand oprnd2Mode, readThrdOperand 1]
-                case op of
-                    -- Add the operands and write to the array
-                    1 -> writeArray mutArr oprnd3 (oprnd1 + oprnd2)
-                    -- Multiply the operands and write to the array
-                    2 -> writeArray mutArr oprnd3 (oprnd1 * oprnd2)
+                -- Accordingly modify the machine
+                newMach <- case op of
+                    -- Add the operands and write to the machine memory
+                    1 -> writeMem mach oprnd3 (oprnd1 + oprnd2)
+                    -- Multiply the operands and write to the machine memory
+                    2 -> writeMem mach oprnd3 (oprnd1 * oprnd2)
                     -- Write 1 to operand3 if oprnd1 is less than oprnd2, else 0
-                    7 -> writeArray mutArr oprnd3 $ if oprnd1 < oprnd2 then 1 else 0
+                    7 -> writeMem mach oprnd3 $ if oprnd1 < oprnd2 then 1 else 0
                     -- Write 1 to operand3 if oprnd1 is equal to oprnd2, else 0
-                    8 -> writeArray mutArr oprnd3 $ if oprnd1 == oprnd2 then 1 else 0
-                -- Return the next instruction index
-                return $ opIx + 4
+                    8 -> writeMem mach oprnd3 $ if oprnd1 == oprnd2 then 1 else 0
+                    _ -> error "Well that wasn't supposed to happen"
+                -- Return the new machine - after bumping up its instruction pointer
+                return $ newMach { insPtr = (+4) . insPtr $ newMach }
             | op `elem` [3, 4] -> do
             {-
             Common case for all opcodes that read 1 operand
@@ -96,53 +156,55 @@ executeOp mutArr opIx = do
             -}
                 -- Read the only operand (force mode 1 for opcode 3 - since oprnd1 is output index for opcode 3)
                 oprnd1 <- readFstOperand $ if op == 3 then 1 else oprnd1Mode
-                if op == 3
-                then
-                    -- Store input in the index given by oprnd1
-                    readLn >>= writeArray mutArr oprnd1
-                else
-                    -- Print output as given by oprnd1
-                    print oprnd1
-                -- Return the next instruction index
-                return $ opIx + 2
+                -- Accordingly modify the machine
+                newMach <-
+                    if op == 3
+                    then
+                        -- Write input in the index given by oprnd1
+                        readLn >>= writeMem mach oprnd1
+                    else
+                        -- Print output as given by oprnd1
+                        print oprnd1 >> return mach
+                -- Return the new machine - after bumping up its instruction pointer
+                return $ newMach { insPtr=(+2) . insPtr $ newMach }
             | op `elem` [5, 6] -> do
             {-
             Common case for all opcodes that read 2 operands
             and either progress the instruction pointer by 3
-            or return a completely new instruction index according
-            to the operand
+            or change it to a completely new instruction index
+            according to the operand
             -}
                 -- Read the operands according to modes
                 [oprnd1, oprnd2] <- sequence [readFstOperand oprnd1Mode, readSndOperand oprnd2Mode]
                 if op == 5
                 then
-                    -- Return oprnd2 if oprn1 is non-zero - otherwise, do nothing and progress to the next instruction
-                    return $ if oprnd1 /= 0 then oprnd2 else opIx + 3
+                    -- Change insPtr to oprnd2 if oprn1 is non-zero - otherwise, change insPtr to the next instruction index
+                    return $ mach { insPtr = if oprnd1 /= 0 then oprnd2 else (+3) . insPtr $ mach }
                 else
-                    -- Return oprnd2 if oprn1 is zero - otherwise, do nothing and progress to the next instruction
-                    return $ if oprnd1 == 0 then oprnd2 else opIx + 3
+                    -- Change insPtr to oprnd2 if oprn1 is zero - otherwise, change insPtr to the next instruction index
+                    return $ mach { insPtr = if oprnd1 == 0 then oprnd2 else (+3) . insPtr $ mach }
             | otherwise -> error "Fatal: Invalid opcode"
     where
         -- Read the first operand right after opIx - according to its mode
         readFstOperand :: Int -> IO Int
-        readFstOperand mode = flip readOperand mode $ opIx + 1
+        readFstOperand mode = flip readOperand mode . (+1) . insPtr $ mach
         -- Read the second operand right after opIx - according to its mode
         readSndOperand :: Int -> IO Int
-        readSndOperand mode = flip readOperand mode $ opIx + 2
+        readSndOperand mode = flip readOperand mode . (+2) . insPtr $ mach
         -- Read the third operand right after opIx - according to its mode
         readThrdOperand :: Int -> IO Int
-        readThrdOperand mode = flip readOperand mode $ opIx + 3
+        readThrdOperand mode = flip readOperand mode . (+3) . insPtr $ mach
         {-
         Generic version of the above functions
         Reads operand from given index - according to the mode
         -}
         readOperand :: Int -> Int -> IO Int
-        readOperand ix mode = do
+        readOperand i mode = do
             case mode of
                 -- Mode 0 means, the value at ix is the index of the actual operand
-                0 -> readArray mutArr ix >>= readArray mutArr
+                0 -> readMem mach i >>= readMem mach
                 -- Mode 1 means, the value at ix is the actual operand
-                1 -> readArray mutArr ix
+                1 -> readMem mach i
                 _ -> error "Fatal: Invalid operand mode"
 
 {-|
