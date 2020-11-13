@@ -78,7 +78,7 @@ writeMem mach i e =
     then writeArray (intCode mach) i e >> return mach
     -- Othewise, insert the value in the oobMem map
     -- Construct a new machine and return it - still has the same mutable array though
-    else return mach { oobMem = Map.insert i e (oobMem mach) }
+    else return mach { oobMem = Map.insert i e . oobMem $ mach }
 
 -- | Read the instruction given by the instruction pointer
 readIns :: IntMachine -> IO Int
