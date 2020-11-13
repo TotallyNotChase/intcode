@@ -1,6 +1,6 @@
 module TestUtils
     (
-        splitStrAt
+     splitStrAt
     ) where
 
 {- Split a string by a list of delimiters -}

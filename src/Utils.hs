@@ -1,6 +1,6 @@
 module Utils
-    (
-        digits, padR
+    ( digits
+    , padR
     ) where
 
 {-| Turn an integer number to a list of int digits -}

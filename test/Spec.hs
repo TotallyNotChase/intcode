@@ -1,7 +1,7 @@
-import Control.Monad ( when )
+import Control.Monad (when)
 
-import IntCode ( constructMachine, runMachine, getOutput )
-import TestUtils ( splitStrAt )
+import IntCode (constructMachine, runMachine, getOutput)
+import TestUtils (splitStrAt)
 
 {-|
 Construct an IntCode machine from given comma
