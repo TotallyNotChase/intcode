@@ -1,5 +1,5 @@
 name:                intcode
-version:             0.1.9
+version:             0.2.1
 github:              "TotallyNotChase/intcode"
 license:             MIT
 author:              "Chase"
@@ -18,7 +18,14 @@ dependencies:
 
 ghc-options:
 - -Wall
-
+- -Wcompat
+- -Widentities
+- -Wincomplete-uni-patterns
+- -Wincomplete-record-updates
+- -Wredundant-constraints
+- -Wmissing-export-lists
+- -Wpartial-fields
+- -Wmissing-deriving-strategies
 library:
   source-dirs: src
   exposed-modules: IntCode
