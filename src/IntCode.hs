@@ -8,6 +8,7 @@ module IntCode
     ) where
 
 import Data.Maybe (fromMaybe)
+import Data.Functor ((<&>))
 import Data.Array.IO
     ( IOArray
     , newListArray
@@ -128,7 +129,7 @@ executeOp mach = do
     -- Read the instruction - which is a number with param modes and opcode grouped up
     opGrp <- readArray (intCode mach) (insPtr mach)
     -- Parse the op group into opcode and operand modes
-    let (opcode, oprnd1Mode, oprnd2Mode) = parseOp opGrp
+    let (opcode, oprnd1Mode, oprnd2Mode, oprnd3Mode) = parseOp opGrp
     -- Execute the opcode, using the operands and their respective modes
     case opcode of
         op
@@ -138,8 +139,13 @@ executeOp mach = do
             where the third operand is the output index for the instruction
             to write to, and progress the instruction pointer by 4
             -}
-                -- Read the operands according to modes (but force mode 1 on third operand since that's output index)
-                [oprnd1, oprnd2, oprnd3] <- sequence [readFstOperand oprnd1Mode, readSndOperand oprnd2Mode, readThrdOperand 1]
+                -- Read the operands according to modes
+                [oprnd1, oprnd2, oprnd3] <- sequence
+                    [ readFstOperand oprnd1Mode
+                    , readSndOperand oprnd2Mode
+                    -- The third one should be interpeted as an output operand
+                    , readOutOperand (3 + insPtr mach) oprnd3Mode
+                    ]
                 -- Accordingly modify the machine
                 newMach <- case op of
                     -- Add the operands and write to the machine memory
@@ -158,8 +164,11 @@ executeOp mach = do
             Common case for all opcodes that read 1 operand
             (i.e I/O opcodes) and progress the instruction pointer by 2
             -}
-                -- Read the only operand (force mode 1 for opcode 3 - since oprnd1 is output index for opcode 3)
-                oprnd1 <- readFstOperand $ if op == 3 then 1 else oprnd1Mode
+                -- Read the only operand
+                oprnd1 <- if opcode == 3
+                    -- Read the operand as output index for opcode 3
+                    then readOutOperand (1 + insPtr mach) oprnd1Mode
+                    else readFstOperand oprnd1Mode
                 -- Accordingly modify the machine
                 newMach <-
                     if op == 3
@@ -200,29 +209,34 @@ executeOp mach = do
                 pure mach { relBasePtr = oprnd1 + relBasePtr mach, insPtr = 2 + insPtr mach}
             | otherwise -> error "Fatal: Invalid opcode"
   where
-    -- Read the first operand right after opIx - according to its mode
+    -- | Read the first operand right after opIx - according to its mode
     readFstOperand :: Int -> IO Int
     readFstOperand mode = flip readOperand mode . (+1) . insPtr $ mach
-    -- Read the second operand right after opIx - according to its mode
+    -- | Read the second operand right after opIx - according to its mode
     readSndOperand :: Int -> IO Int
     readSndOperand mode = flip readOperand mode . (+2) . insPtr $ mach
-    -- Read the third operand right after opIx - according to its mode
-    readThrdOperand :: Int -> IO Int
-    readThrdOperand mode = flip readOperand mode . (+3) . insPtr $ mach
-    {-
-    Generic version of the above functions
-    Reads operand from given index - according to the mode
-    -}
+    {- | Generic version of the above functions
+    Reads operand from given index - according to the mode -}
     readOperand :: Int -> Int -> IO Int
-    readOperand i mode = do
-        case mode of
-            -- Mode 0 means, the value at ix is the index of the actual operand
+    readOperand i mode = case mode of
+            -- Mode 0 means, the value at i is the index of the actual operand
             0 -> readMem mach i >>= readMem mach
-            -- Mode 1 means, the value at ix is the actual operand
+            -- Mode 1 means, the value at i is the actual operand
             1 -> readMem mach i
-            -- Mode 2 means, the value at ix + relBasePtr is the index of the actual operand
+            -- Mode 2 means, the value at i + relBasePtr is the index of the actual operand
             2 -> readMem mach i >>= readMem mach . (+ relBasePtr mach)
             _ -> error "Fatal: Invalid operand mode"
+    {- | Function to read the operand at index i as an output operand
+    This means the operand to be read is an index where the instruction will write to 
+    Mode 1 is unavailable for this -}
+    readOutOperand :: Int -> Int -> IO Int
+    readOutOperand i mode = case mode of
+        -- Mode 0 means the output index is the value at i
+        0 -> readMem mach i
+        -- Mode 2 means the output index is the value at i + relative base pointer
+        2 -> readMem mach i <&> (+ relBasePtr mach)
+        _ -> error "Fatal: Invalid output operand mode"
+    
 
 {- |
 Parse the op group to extract the opcode and parameter modes
@@ -234,7 +248,7 @@ This means, opcode == 2
             2nd param mode == 1
             3rd param mode == 0 (omitted due to being leading zero)
 -}
-parseOp :: Int -> (Int, Int, Int)
+parseOp :: Int -> (Int, Int, Int, Int)
 parseOp opGrp = digsTuple digsL
   where
     -- Extract the first 2 digits (actual opcode)
@@ -243,7 +257,7 @@ parseOp opGrp = digsTuple digsL
     rest = fromIntegral opGrp `div` 100
     -- Extract all the remaining digits and add them after opcode
     -- Then pad the resulting list to a length of 3 on the right side
-    digsL = padR 3 0 $ opcode : reverse (digits rest)
+    digsL = padR 4 0 $ opcode : reverse (digits rest)
     {-
     The resulting digsL will be an element with 3 numbers
     The first one is the actual opcode
@@ -251,4 +265,4 @@ parseOp opGrp = digsTuple digsL
 
     Turn this into a tuple and return it
     -}
-    digsTuple [x, y, z] = (x, y, z)
+    digsTuple [x, y, z, a] = (x, y, z, a)
