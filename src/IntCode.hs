@@ -187,7 +187,7 @@ executeOp mach = do
                 else
                     -- Change insPtr to oprnd2 if oprn1 is zero - otherwise, change insPtr to the next instruction index
                     pure mach { insPtr = if oprnd1 == 0 then oprnd2 else 3 + insPtr mach }
-            |  op == 9 -> do
+            | op == 9 -> do
             {-
             Opcode 9 is for changing the relative base pointer
             Read the operand and add it to the relative base pointer
