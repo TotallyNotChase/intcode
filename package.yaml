@@ -1,5 +1,5 @@
 name:                intcode
-version:             0.2.3
+version:             0.3.0
 github:              "TotallyNotChase/intcode"
 license:             MIT
 author:              "Chase"
@@ -26,9 +26,12 @@ ghc-options:
 - -Wmissing-export-lists
 - -Wpartial-fields
 - -Wmissing-deriving-strategies
+
 library:
   source-dirs: src
-  exposed-modules: IntCode
+  exposed-modules:
+  -  IntCode
+  -  IntCode.ST
   ghc-options:
   - -O3
 
