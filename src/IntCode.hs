@@ -4,7 +4,6 @@ module IntCode
     , runMachine
     , getOutput
     , readMem
-    , writeMem
     ) where
 
 import IntCode.IO
@@ -13,5 +12,4 @@ import IntCode.IO
     , runMachine
     , getOutput
     , readMem
-    , writeMem
     )
