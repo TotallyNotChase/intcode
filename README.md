@@ -8,7 +8,7 @@ Just trying to learn """pure mutability""" in practice.
 * Absolutely nothing else
 
 # Usage
-The `IntCode` module exports a canonical IntCode interpreter. That is, it uses actual stdin and stdout for I/O - as instructed. This is how it works-
+The `IntCode` module exports a canonical IntCode interpreter. That is, it uses actual stdin and stdout for I/O - as instructed. It's essentially a re-export of `IntCode.IO`.
 
 That's all fine and dandy, except in later days - you're asked to use that I/O with mass amount of inputs. Which means, you need to automate it - interactively automating stdio is a bit of a pain so there's also `IntCode.ST`
 
@@ -98,9 +98,6 @@ Consider `4, 0, 3, 1, 99` - where input list is `[]` (no input provided by user)
   The leftmost value from `inps` is popped off from the sequence and used for the input
 
 If at any point, `inps` is an empty sequence during the input instruction (opcode 3) - the machine halts with an exception
-
-This behavior is helpful for day 7 part 2. Where you need to input 2 ints at first, and all the next inputs will simply be the previous output. All you have to do is give the 2 input list as the second argument to `constructMachine`, and run the machine. Once the 2 inputs are exhausted, it'll start pulling from the outputs and keep going until it halts.
-
 ```hs
 -- Make an intcode machine that takes 1 as its input in its first encounter with opcode 3 (input op)
 constructMachine [3, 12, 6, 12, 15, 1, 13, 14, 13, 4, 13, 99, -1, 0, 1, 9] [1]
@@ -142,34 +139,52 @@ constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99] [] >>= runMachine >>= flip readMe
 ```hs
 import IntCode (constructMachine, runMachine, getOutput)
 
-solution :: String -> IO Int
-solution inpstr =
+solution :: [Int] -> IO Int
+solution inpl =
     -- Construct the mutable IntCode array 
     constructMachine inpl
     -- Run the machine
     >>= runMachine
     -- Get the final output (result at index 0)
     >>= getOutput
-  where
-    -- Convert the string into a list of ints
-    inpl = map read . splitStrAt "," $ inpstr   
 ```
-Input is the puzzle input, returned value is the answer
+`inpl` is the puzzle input as a list of ints, returned value is the answer
 
-## Day 5 solution
+## Day 5 solution (using `IntCode.IO`/`IntCode`)
 ```hs
-solution :: [Char] -> IO ()
-solution inpstr = void $
+import Control.Monad (void)
+
+import IntCode (constructMachine, runMachine, getOutput)
+
+solution :: [Int] -> IO ()
+solution inpl = void $
     -- Construct the mutable IntCode array 
     constructMachine inpl
     -- Run the machine
     >>= runMachine
-  where
-    -- Convert the string into a list of ints
-    inpl = map read . splitStrAt "," $ inpstr
 ```
 
-Input is the puzzle input, the user should enter 1 to stdin for part 1 and 5 for part 2 - the result will be printed in stdout
+`inpl` is the puzzle input as a list of ints, the user should enter 1 to stdin for part 1 and 5 for part 2 - the result will be printed in stdout
+
+## Day 5 solution (using `IntCode.ST`)
+```hs
+import Control.Monad.ST (stToIO)
+import Data.Functor ((<&>))
+import Data.Sequence (Seq)
+
+import IntCode.ST (constructMachine, runMachine, IntMachine(outs))
+
+solution :: [Int] -> Int -> IO (Seq Int)
+solution inpl progInp = stToIO $
+    -- Construct the mutable IntCode array 
+    constructMachine inpl [progInp]
+    -- Run the machine
+    >>= runMachine
+    <&> outs
+```
+`inpl` is the puzzle input as a list of ints, `progInp` is the list of stdin inputs (for part 1, this is `[1]` and `[5]` for part 2) - the returned value is a sequence of outputs - the final of which is the answer.
+
+No stdio interaction is necessary.
 
 ## Day 9 solution
 ```hs
@@ -184,3 +199,23 @@ solution inpstr = void $
     inpl = map read . splitStrAt "," $ inpstr
 ```
 Same as day 5 - this time the part 1 input is 1 and part 2 input is 2 - the result will be printed in stdout
+
+## Day 9 solution (using `IntCode.ST`)
+```hs
+import Control.Monad.ST (stToIO)
+import Data.Functor ((<&>))
+import Data.Sequence (Seq)
+
+import IntCode.ST (constructMachine, runMachine, IntMachine(outs))
+
+solution :: [Int] -> Int -> IO (Seq Int)
+solution inpl progInp = stToIO $
+    -- Construct the mutable IntCode array 
+    constructMachine inpl [progInp]
+    -- Run the machine
+    >>= runMachine
+    <&> outs
+```
+Same as day 5 - this time the part 1 `progInp` is `[1]` and part 2 `progInp` is `[2]` - the returned value is a sequence of outputs - the final of which is the answer.
+
+No stdio interaction is necessary.
