@@ -12,7 +12,7 @@ The `IntCode` module exports a canonical IntCode interpreter. That is, it uses a
 
 That's all fine and dandy, except in later days - you're asked to use that I/O with mass amount of inputs. Which means, you need to automate it - interactively automating stdio is a bit of a pain so there's also `IntCode.ST`
 
-`IntCode.ST` exports functions with the same name as `IntCode` - except there's no stdio here - the inputs should be provided as a list, to `constructMachine`. The outputs will be present in the `outs` property of the `IntMachine` (accesible using the `outs` function)
+`IntCode.ST` exports functions with the same names as `IntCode`/`IntCode.IO` - except there's no stdio here - the inputs should be provided as a list to `constructMachine`. The outputs will be present in the `outs` property of the `IntMachine` (accesible using the `outs` function)
 
 # API - Module `IntCode`
 ## `IntMachine` - The Intcode machine
@@ -35,12 +35,24 @@ Takes a list of integers (the intcode puzzle input) and returns an intcode machi
 ```hs
 constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99]
 ```
+## `runIns :: IntMachine -> IO (Maybe IntMachine)`
+Takes an intcode machine and runs the instruction currently pointed at by the instruction pointer
+
+This will accordingly modify the machine and progress the instruction pointer to the next instruction
+
+If the instruction currently pointed at by the instruction pointer is `99` - returns `Nothing`
+
+Otherwise, the modified machine is returned - ready to be used by `runIns` again (after unwrapping from `Maybe`)
+```hs
+do
+    mach <- constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99]
+    newMach <- runIns mach
+```
 ## `runMachine :: IntMachine -> IO IntMachine`
-Takes the intcode machine constructed from `constructMachine` and runs the program - essentially mutating the machine and returning it
+A quality of life version of `runIns` - repeatedly runs `runIns` until the program halts
 ```hs
 constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99] >>= runMachine
 ```
-
 ## `getOutput :: IntMachine -> IO Int`
 Takes the intcode machine and returns the value at memory index 0
 ```hs
@@ -86,8 +98,7 @@ data IntMachine s = IntMachine
 ## `constructMachine :: [Int] -> [Int] -> IO IntMachine`
 Takes a list of integers (the intcode puzzle input) and a list of inputs - returns an intcode machine
 
-The list of inputs should be sequential. That is, if the list was `[4, 5, 6, 7, 8]` - At the first input (opcode 3), the program is given 4
-at the next one, it is given 5, then 6 and so on
+The list of inputs should be sequential. That is, if the list was `[4, 5, 6, 7, 8]` - At the first input (opcode 3), the program is given 4, at the next one, it is given 5, then 6 and so on
 
 Once all inputs from this list runs out and the program encounters *another* input instruction (opcode 3) - it starts using *the outputs* as the input
 
@@ -102,12 +113,24 @@ If at any point, `inps` is an empty sequence during the input instruction (opcod
 -- Make an intcode machine that takes 1 as its input in its first encounter with opcode 3 (input op)
 constructMachine [3, 12, 6, 12, 15, 1, 13, 14, 13, 4, 13, 99, -1, 0, 1, 9] [1]
 ```
-## `runMachine :: IntMachine -> IO IntMachine`
-Takes the intcode machine constructed from `constructMachine` and runs the program - essentially mutating the machine and returning it
+## `runIns :: IntMachine -> ST s (Maybe (IntMachine s))`
+Takes an intcode machine and runs the instruction currently pointed at by the instruction pointer
+
+This will accordingly modify the machine and progress the instruction pointer to the next instruction
+
+If the instruction currently pointed at by the instruction pointer is `99` - returns `Nothing`
+
+Otherwise, the modified machine is returned - ready to be used by `runIns` again (after unwrapping from `Maybe`)
+```hs
+do
+    mach <- constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99] []
+    newMach <- runIns mach
+```
+## `runMachine :: IntMachine -> ST s (IntMachine s)`
+A quality of life version of `runIns` - repeatedly runs `runIns` until the program halts
 ```hs
 constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99] [] >>= runMachine
 ```
-
 ## `getOutput :: IntMachine -> IO Int`
 Takes the intcode machine and returns the value at memory index 0
 ```hs
