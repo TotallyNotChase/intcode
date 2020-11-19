@@ -1,6 +1,7 @@
 module IntCode.ST
     ( IntMachine(..)
     , constructMachine
+    , runIns
     , runMachine
     , getOutput
     , readMem
@@ -111,6 +112,25 @@ readIns :: IntMachine s -> ST s Int
 readIns mach = readArray (intCode mach) (insPtr mach)
 
 {- |
+Run the instruction currently pointed to by the
+instruction pointer
+
+Mutates the machine and progresses to the next instruction
+
+Returns the mutated machine
+-}
+runIns :: IntMachine s -> ST s (Maybe (IntMachine s))
+runIns mach = do
+    -- Read the instruction
+    ins <- readIns mach
+    -- If it is 99, return Nothing - signaling halt
+    if ins /= 99
+        -- Execute the opcode and return Just the modified machine
+        then executeOp mach <&> Just
+        -- Encountered 99 - return Nothing
+        else pure Nothing
+
+{- |
 Mutate the IntCode machine by running
 its instructions
 
@@ -122,14 +142,10 @@ will be mutated accordingly
 -}
 runMachine :: IntMachine s -> ST s (IntMachine s)
 runMachine mach = do
-    -- Read the instruction
-    -- If it is 99, halt - otherwise execute op and continue
-    ins <- readIns mach
-    if ins /=99
-        -- Execute the opcode and continue using the modified machine returned
-        then executeOp mach >>= runMachine
-        -- Encountered 99 - halt and return machine
-        else pure mach
+    -- Execute the current opcode and obtain a modified machine
+    newMach <- runIns mach
+    -- Continue to the next opcode unless newMach is Nothing (runIns encountered 99)
+    maybe (pure mach) runMachine newMach
 
 {- |
 Mutate the IntCode machine by running

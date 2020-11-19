@@ -1,5 +1,5 @@
 name:                intcode
-version:             0.3.0
+version:             0.4.0
 github:              "TotallyNotChase/intcode"
 license:             MIT
 author:              "Chase"
@@ -30,8 +30,9 @@ ghc-options:
 library:
   source-dirs: src
   exposed-modules:
-  -  IntCode
-  -  IntCode.ST
+  - IntCode
+  - IntCode.IO
+  - IntCode.ST
   ghc-options:
   - -O3
 
