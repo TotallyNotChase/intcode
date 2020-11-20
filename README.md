@@ -35,6 +35,20 @@ Takes a list of integers (the intcode puzzle input) and returns an intcode machi
 ```hs
 constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99]
 ```
+## `readIns :: IntMachine s -> IO (Int, Int, Int, Int)`
+Takes an intcode machine and reads the instruction currently pointed by the instruction pointer
+
+The instruction is then parsed into a tuple of structure ()
+
+If the instruction pointer pointed to the value of 1002, `readIns` will return (2, 0, 1, 0)
+
+This means, opcode == 2
+            1st param mode == 0
+            2nd param mode == 1
+            3rd param mode == 0 (omitted due to being leading zero)
+```hs
+constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99] >>= readIns
+```
 ## `runIns :: IntMachine -> IO (Maybe IntMachine)`
 Takes an intcode machine and runs the instruction currently pointed at by the instruction pointer
 
@@ -44,9 +58,7 @@ If the instruction currently pointed at by the instruction pointer is `99` - ret
 
 Otherwise, the modified machine is returned - ready to be used by `runIns` again (after unwrapping from `Maybe`)
 ```hs
-do
-    mach <- constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99]
-    newMach <- runIns mach
+constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99] >>= runIns
 ```
 ## `runMachine :: IntMachine -> IO IntMachine`
 A quality of life version of `runIns` - repeatedly runs `runIns` until the program halts
@@ -113,6 +125,20 @@ If at any point, `inps` is an empty sequence during the input instruction (opcod
 -- Make an intcode machine that takes 1 as its input in its first encounter with opcode 3 (input op)
 constructMachine [3, 12, 6, 12, 15, 1, 13, 14, 13, 4, 13, 99, -1, 0, 1, 9] [1]
 ```
+## `readIns :: IntMachine s -> ST s (Int, Int, Int, Int)`
+Takes an intcode machine and reads the instruction currently pointed by the instruction pointer
+
+The instruction is then parsed into a tuple of structure ()
+
+If the instruction pointer pointed to the value of 1002, `readIns` will return (2, 0, 1, 0)
+
+This means, opcode == 2
+            1st param mode == 0
+            2nd param mode == 1
+            3rd param mode == 0 (omitted due to being leading zero)
+```hs
+constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99] [] >>= readIns
+```
 ## `runIns :: IntMachine -> ST s (Maybe (IntMachine s))`
 Takes an intcode machine and runs the instruction currently pointed at by the instruction pointer
 
@@ -122,9 +148,7 @@ If the instruction currently pointed at by the instruction pointer is `99` - ret
 
 Otherwise, the modified machine is returned - ready to be used by `runIns` again (after unwrapping from `Maybe`)
 ```hs
-do
-    mach <- constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99] []
-    newMach <- runIns mach
+constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99] [] >>= runIns mach
 ```
 ## `runMachine :: IntMachine -> ST s (IntMachine s)`
 A quality of life version of `runIns` - repeatedly runs `runIns` until the program halts
