@@ -1,10 +1,9 @@
 module IntCode.IO
-    ( IntMachine(..)
+    ( IntMachine
     , constructMachine
     , readIns
     , runIns
     , runMachine
-    , getOutput
     , readMem
     ) where
 
@@ -18,8 +17,7 @@ import Data.Array.IO
     )
 import qualified Data.IntMap as Map
 
-import Utils (digits, padR)
-
+import Utils (parseOp)
 
 -- | The IntCode program itself - a mutable array
 type Program = IOArray Int Int
@@ -59,10 +57,6 @@ constructMachine l = newListArray (0, lenArr - 1) l <&>
         }
   where
     lenArr = length l
-
--- | Get the output of the mutated IntCode machine - i.e the value at index 0 of the program
-getOutput :: IntMachine -> IO Int
-getOutput = flip readArray 0 . intCode
 
 -- | Read value of memory index - considers both the intcode program itself and the infinite memory band
 readMem :: IntMachine -> Int -> IO Int
@@ -204,7 +198,7 @@ executeOp mach opGrp = do
                 -- Read the only operand
                 oprnd1 <- readFstOperand oprnd1Mode
                 -- Add the operand to relBasePtr - also progress the insPtr
-                pure mach { relBasePtr = oprnd1 + relBasePtr mach, insPtr = 2 + insPtr mach}
+                pure mach { relBasePtr = oprnd1 + relBasePtr mach, insPtr = 2 + insPtr mach }
             | otherwise -> error "Fatal: Invalid opcode"
   where
     -- | Read the first operand right after opIx - according to its mode
@@ -234,30 +228,3 @@ executeOp mach opGrp = do
         -- Mode 2 means the output index is the value at i + relative base pointer
         2 -> readMem mach i <&> (+ relBasePtr mach)
         _ -> error "Fatal: Invalid output operand mode"
-
-
-{- | Parse the instruction to extract the opcode and parameter modes
-
-For 1002, it'll return (2, 0, 1, 0)
-
-This means, opcode == 2
-            1st param mode == 0
-            2nd param mode == 1
-            3rd param mode == 0 (omitted due to being leading zero)
--}
-parseOp :: Int -> (Int, Int, Int, Int)
-parseOp opGrp = digsTuple digsL
-  where
-    -- Extract the first 2 digits (actual opcode)
-    opcode = opGrp `mod` 100
-    -- The rest digits should be extracted one by one
-    rest = fromIntegral opGrp `div` 100
-    -- Extract all the remaining digits and add them after opcode
-    -- Then pad the resulting list to a length of 4 on the right side
-    digsL = padR 4 0 $ opcode : reverse (digits rest)
-    {- The resulting digsL will be an element with 4 numbers
-    The first one is the actual opcode
-    The next 3 are the modes of operand 1 and 2 respectively
-
-    Turn this into a tuple and return it -}
-    digsTuple [x, y, z, a] = (x, y, z, a)

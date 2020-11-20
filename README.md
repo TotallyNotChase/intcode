@@ -125,6 +125,34 @@ If at any point, `inps` is an empty sequence during the input instruction (opcod
 -- Make an intcode machine that takes 1 as its input in its first encounter with opcode 3 (input op)
 constructMachine [3, 12, 6, 12, 15, 1, 13, 14, 13, 4, 13, 99, -1, 0, 1, 9] [1]
 ```
+## `addInput :: IntMachine s -> Int -> ST s (IntMachine s)`
+Add an input to be used by opcode 3
+
+The element is *appended* to the already existing input sequence
+
+```hs
+-- The machine now has [1, 42] in its input sequence
+-- i.e it will use 1 as its first input to opcode 3 and 42 as its second
+constructMachine [3, 12, 6, 12, 15, 1, 13, 14, 13, 4, 13, 99, -1, 0, 1, 9] [1] >>= flip addInput 42
+```
+## `addInputs :: IntMachine s -> [Int] -> ST s (IntMachine s)`
+Add multiple inputs to be used by opcode 3
+
+Each element is *appended* to the already existing input sequence in the same order as the list
+
+```hs
+-- The machine now has [1, 42, 13] in its input sequence
+-- i.e it will use 1 as its first input to opcode 3 and 2 as its second and 13 as its third
+constructMachine [3, 12, 6, 12, 15, 1, 13, 14, 13, 4, 13, 99, -1, 0, 1, 9] [1] >>= flip addInput [42, 13]
+```
+## `getOutputs :: IntMachine s -> ST s [Int]`
+Get the output sequence (outputs from opcode 4) from the machine
+
+The list of outputs is in the order they were outputted - from left to right
+```hs
+-- This prints [1]
+constructMachine [3, 9, 8, 9, 10, 9, 4, 9, 99, -1, 8] [8] >>= runMachine >>= getOutputs
+```
 ## `readIns :: IntMachine s -> ST s (Int, Int, Int, Int)`
 Takes an intcode machine and reads the instruction currently pointed by the instruction pointer
 
@@ -155,14 +183,6 @@ A quality of life version of `runIns` - repeatedly runs `runIns` until the progr
 ```hs
 constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99] [] >>= runMachine
 ```
-## `getOutput :: IntMachine -> IO Int`
-Takes the intcode machine and returns the value at memory index 0
-```hs
--- This returns 30
-constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99] [] >>= runMachine >>= getOutput
--- This returns 1
-constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99] [] >>= getOutput
-```
 ## `readMem :: IntMachine -> Int -> IO Int`
 A general version of `getOutput` - return the value of the given index from the machine's memory
 
@@ -184,7 +204,7 @@ constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99] [] >>= runMachine >>= flip readMe
 
 ## Day 2 solution
 ```hs
-import IntCode (constructMachine, runMachine, getOutput)
+import IntCode (constructMachine, runMachine, readMem)
 
 solution :: [Int] -> IO Int
 solution inpl =
@@ -193,7 +213,7 @@ solution inpl =
     -- Run the machine
     >>= runMachine
     -- Get the final output (result at index 0)
-    >>= getOutput
+    >>= flip readMem 0
 ```
 `inpl` is the puzzle input as a list of ints, returned value is the answer
 
@@ -201,7 +221,7 @@ solution inpl =
 ```hs
 import Control.Monad (void)
 
-import IntCode (constructMachine, runMachine, getOutput)
+import IntCode (constructMachine, runMachine)
 
 solution :: [Int] -> IO ()
 solution inpl = void $
@@ -219,7 +239,7 @@ import Control.Monad.ST (stToIO)
 import Data.Functor ((<&>))
 import Data.Sequence (Seq)
 
-import IntCode.ST (constructMachine, runMachine, IntMachine(outs))
+import IntCode.ST (constructMachine, runMachine, getOutputs)
 
 solution :: [Int] -> Int -> IO (Seq Int)
 solution inpl progInp = stToIO $
@@ -227,7 +247,10 @@ solution inpl progInp = stToIO $
     constructMachine inpl [progInp]
     -- Run the machine
     >>= runMachine
-    <&> outs
+    -- Get the outputs as a list
+    >>= getOutputs
+    -- Return the last element of said list
+    <&> last
 ```
 `inpl` is the puzzle input as a list of ints, `progInp` is the list of stdin inputs (for part 1, this is `[1]` and `[5]` for part 2) - the returned value is a sequence of outputs - the final of which is the answer.
 
@@ -253,7 +276,7 @@ import Control.Monad.ST (stToIO)
 import Data.Functor ((<&>))
 import Data.Sequence (Seq)
 
-import IntCode.ST (constructMachine, runMachine, IntMachine(outs))
+import IntCode.ST (constructMachine, runMachine, getOutputs)
 
 solution :: [Int] -> Int -> IO (Seq Int)
 solution inpl progInp = stToIO $
@@ -261,7 +284,10 @@ solution inpl progInp = stToIO $
     constructMachine inpl [progInp]
     -- Run the machine
     >>= runMachine
-    <&> outs
+    -- Get the outputs as a list
+    >>= getOutputs
+    -- Return the last element of said list
+    <&> last
 ```
 Same as day 5 - this time the part 1 `progInp` is `[1]` and part 2 `progInp` is `[2]` - the returned value is a sequence of outputs - the final of which is the answer.
 
