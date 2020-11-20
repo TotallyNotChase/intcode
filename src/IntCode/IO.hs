@@ -1,6 +1,7 @@
 module IntCode.IO
     ( IntMachine(..)
     , constructMachine
+    , readIns
     , runIns
     , runMachine
     , getOutput
@@ -48,9 +49,8 @@ data IntMachine = IntMachine
 
 -- | Construct an IntCode machine from a list of ints
 constructMachine :: [Int] -> IO IntMachine
-constructMachine l = do
-    mutArr <- newListArray (0, lenArr - 1) l
-    pure IntMachine
+constructMachine l = newListArray (0, lenArr - 1) l <&>
+    \mutArr -> IntMachine
         { insPtr=0
         , relBasePtr=0
         , programLen=lenArr
@@ -66,31 +66,30 @@ getOutput = flip readArray 0 . intCode
 
 -- | Read value of memory index - considers both the intcode program itself and the infinite memory band
 readMem :: IntMachine -> Int -> IO Int
-readMem mach i =
-    if i < programLen mach
-    -- If index is within bounds of the intcode program - get the value from there
+readMem mach i = if i < programLen mach
+    -- Index is within bounds of the intcode program - get the value from there
     then flip readArray i . intCode $ mach
-    -- Othewise, try to find the value in the oobMem map
+    -- Index out of bounds, try to find the value in the oobMem map
     -- If that index is not found in the map - it means it is unmodified (i.e 0 by default)
     else pure $ fromMaybe 0 . Map.lookup i . oobMem $ mach
 
 -- | Write value to memory index - considers both the intcode program itself and the infinite memory band
 writeMem :: IntMachine -> Int -> Int -> IO IntMachine
-writeMem mach i e = 
-    if i < programLen mach
-    -- If index is within bounds of the intcode program - mutate the array
-    -- Return the same mach - since the IOArray has been modified internally
+writeMem mach i e = if i < programLen mach
+    -- Index within bounds of the program array - write to it
     then writeArray (intCode mach) i e >> pure mach
-    -- Othewise, insert the value in the oobMem map
-    -- Construct a new machine and return it - still has the same mutable array though
+    -- Index out of bounds, insert the value in the oobMem map
     else pure mach { oobMem = Map.insert i e . oobMem $ mach }
 
--- | Read the instruction given by the instruction pointer
-readIns :: IntMachine -> IO Int
-readIns mach = readArray (intCode mach) (insPtr mach)
+{- | Read the instruction given by the instruction pointer
+and parse it into a tuple containing the actual opcode and the operand modes
 
-{- |
-Run the instruction currently pointed to by the
+The tuple is structured like - (opcode, operand 1 mode, operand 2 mode, operand 3 mode)
+-}
+readIns :: IntMachine -> IO (Int, Int, Int, Int)
+readIns mach = parseOp <$> readArray (intCode mach) (insPtr mach)
+
+{- | Run the instruction currently pointed to by the
 instruction pointer
 
 Mutates the machine and progresses to the next instruction
@@ -98,18 +97,14 @@ Mutates the machine and progresses to the next instruction
 Returns the mutated machine
 -}
 runIns :: IntMachine -> IO (Maybe IntMachine)
-runIns mach = do
-    -- Read the instruction
-    ins <- readIns mach
-    -- If it is 99, return Nothing - signaling halt
-    if ins /= 99
+runIns mach = -- Read the instruction and parse out the opcode
+    readIns mach >>= \ins@(opcode, _, _, _) -> if opcode /= 99
         -- Execute the opcode and return Just the modified machine
-        then executeOp mach <&> Just
+        then executeOp mach ins <&> Just
         -- Encountered 99 - return Nothing
         else pure Nothing
 
-{- |
-Mutate the IntCode machine by running
+{- | Mutate the IntCode machine by running
 its instructions
 
 This essentially runs the intcode program and, as
@@ -119,15 +114,12 @@ After this function succeeds - the IntCode passed
 will be mutated accordingly
 -}
 runMachine :: IntMachine -> IO IntMachine
-runMachine mach = do
-    -- Execute the current opcode and obtain a modified machine
-    newMach <- runIns mach
-    -- Continue to the next opcode unless newMach is Nothing (runIns encountered 99)
-    maybe (pure mach) runMachine newMach
+runMachine mach = -- Execute the current opcode and obtain a modified machine
+    runIns mach >>=
+        -- Continue to the next opcode unless newMach is Nothing (runIns encountered 99)
+        maybe (pure mach) runMachine
 
-
-{- |
-Helper function to execute an operator
+{- | Helper function to execute an operator
 given its index
 
 Reads the instruction from opIx
@@ -139,21 +131,18 @@ This mutates the array accordingly
 
 The result returned is the next instruction index
 -}
-executeOp :: IntMachine -> IO IntMachine
-executeOp mach = do
-    -- Read the instruction - which is a number with param modes and opcode grouped up
-    opGrp <- readArray (intCode mach) (insPtr mach)
-    -- Parse the op group into opcode and operand modes
-    let (opcode, oprnd1Mode, oprnd2Mode, oprnd3Mode) = parseOp opGrp
+executeOp :: IntMachine -> (Int, Int, Int, Int) -> IO IntMachine
+executeOp mach opGrp = do
+    -- opGrp is a number with param modes and opcode grouped up
+    -- Separate it into the actual opcode and operand modes
+    let (opcode, oprnd1Mode, oprnd2Mode, oprnd3Mode) = opGrp
     -- Execute the opcode, using the operands and their respective modes
     case opcode of
         op
             | op `elem` [1, 2, 7, 8] -> do
-            {-
-            Common case for all opcodes that read 3 operands,
+            {- Common case for all opcodes that read 3 operands,
             where the third operand is the output index for the instruction
-            to write to, and progress the instruction pointer by 4
-            -}
+            to write to, and progress the instruction pointer by 4 -}
                 -- Read the operands according to modes
                 [oprnd1, oprnd2, oprnd3] <- sequence
                     [ readFstOperand oprnd1Mode
@@ -175,10 +164,8 @@ executeOp mach = do
                 -- Return the new machine - after bumping up its instruction pointer
                 pure newMach { insPtr = 4 + insPtr mach }
             | op `elem` [3, 4] -> do
-            {-
-            Common case for all opcodes that read 1 operand
-            (i.e I/O opcodes) and progress the instruction pointer by 2
-            -}
+            {- Common case for all opcodes that read 1 operand
+            (i.e I/O opcodes) and progress the instruction pointer by 2 -}
                 -- Read the only operand
                 oprnd1 <- if opcode == 3
                     -- Read the operand as output index for opcode 3
@@ -196,12 +183,10 @@ executeOp mach = do
                 -- Return the new machine - after bumping up its instruction pointer
                 pure newMach { insPtr = 2 + insPtr newMach }
             | op `elem` [5, 6] -> do
-            {-
-            Common case for all opcodes that read 2 operands
+            {- Common case for all opcodes that read 2 operands
             and either progress the instruction pointer by 3
             or change it to a completely new instruction index
-            according to the operand
-            -}
+            according to the operand -}
                 -- Read the operands according to modes
                 [oprnd1, oprnd2] <- sequence [readFstOperand oprnd1Mode, readSndOperand oprnd2Mode]
                 if op == 5
@@ -212,12 +197,10 @@ executeOp mach = do
                     -- Change insPtr to oprnd2 if oprn1 is zero - otherwise, change insPtr to the next instruction index
                     pure mach { insPtr = if oprnd1 == 0 then oprnd2 else 3 + insPtr mach }
             | op == 9 -> do
-            {-
-            Opcode 9 is for changing the relative base pointer
+            {- Opcode 9 is for changing the relative base pointer
             Read the operand and add it to the relative base pointer
             progress the instruction pointer to the next instruction
-            return the new machine with these updated values
-            -}
+            return the new machine with these updated values -}
                 -- Read the only operand
                 oprnd1 <- readFstOperand oprnd1Mode
                 -- Add the operand to relBasePtr - also progress the insPtr
@@ -253,10 +236,9 @@ executeOp mach = do
         _ -> error "Fatal: Invalid output operand mode"
 
 
-{- |
-Parse the op group to extract the opcode and parameter modes
+{- | Parse the instruction to extract the opcode and parameter modes
 
-For op group 1002, it'll return (0, 1, 0, 2)
+For 1002, it'll return (2, 0, 1, 0)
 
 This means, opcode == 2
             1st param mode == 0
@@ -271,13 +253,11 @@ parseOp opGrp = digsTuple digsL
     -- The rest digits should be extracted one by one
     rest = fromIntegral opGrp `div` 100
     -- Extract all the remaining digits and add them after opcode
-    -- Then pad the resulting list to a length of 3 on the right side
+    -- Then pad the resulting list to a length of 4 on the right side
     digsL = padR 4 0 $ opcode : reverse (digits rest)
-    {-
-    The resulting digsL will be an element with 3 numbers
+    {- The resulting digsL will be an element with 4 numbers
     The first one is the actual opcode
-    The next 2 are the modes of operand 1 and 2 respectively
+    The next 3 are the modes of operand 1 and 2 respectively
 
-    Turn this into a tuple and return it
-    -}
+    Turn this into a tuple and return it -}
     digsTuple [x, y, z, a] = (x, y, z, a)
