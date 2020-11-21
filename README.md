@@ -145,12 +145,17 @@ Each element is *appended* to the already existing input sequence in the same or
 -- i.e it will use 1 as its first input to opcode 3 and 2 as its second and 13 as its third
 constructMachine [3, 12, 6, 12, 15, 1, 13, 14, 13, 4, 13, 99, -1, 0, 1, 9] [1] >>= flip addInput [42, 13]
 ```
+## `viewInputs :: IntMachine s -> ST s [Int]`
+```hs
+-- This returns [8]
+constructMachine [3, 9, 8, 9, 10, 9, 4, 9, 99, -1, 8] [8] >>= viewInputs
+```
 ## `getOutputs :: IntMachine s -> ST s [Int]`
 Get the output sequence (outputs from opcode 4) from the machine
 
 The list of outputs is in the order they were outputted - from left to right
 ```hs
--- This prints [1]
+-- This returns [1]
 constructMachine [3, 9, 8, 9, 10, 9, 4, 9, 99, -1, 8] [8] >>= runMachine >>= getOutputs
 ```
 ## `readIns :: IntMachine s -> ST s (Int, Int, Int, Int)`

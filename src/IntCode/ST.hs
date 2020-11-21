@@ -3,6 +3,7 @@ module IntCode.ST
     , constructMachine
     , addInput
     , addInputs
+    , viewInputs
     , getOutputs
     , runIns
     , runMachine
@@ -92,6 +93,10 @@ addInput mach inp = pure mach { inps = inps mach |> inp }
 -- | Append multiple inputs to the inps sequence of the given machine
 addInputs :: IntMachine s -> [Int] -> ST s (IntMachine s)
 addInputs = foldM addInput
+
+-- | Get a list of inputs from the intmachine - in the order they will be used as input
+viewInputs :: IntMachine s -> ST s [Int]
+viewInputs = pure . toList . inps
 
 -- | Get a list of outputs from the intmachine - in the order they were outputted
 getOutputs :: IntMachine s -> ST s [Int]
