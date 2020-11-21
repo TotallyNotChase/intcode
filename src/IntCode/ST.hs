@@ -5,6 +5,7 @@ module IntCode.ST
     , addInputs
     , viewInputs
     , getOutputs
+    , readIns
     , runIns
     , runMachine
     , readMem
