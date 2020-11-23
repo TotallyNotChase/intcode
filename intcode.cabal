@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ae99ffb18635df73f82ef0795382c7dd84a74d33522c71dcf891775130e55bbb
+-- hash: 9a1d34bc2096e980db92e7376b446167e1657e7f0271a0d4402356a9d1a1dce7
 
 name:           intcode
-version:        0.4.5
+version:        0.4.6
 description:    Please see the README on GitHub at <https://github.com/TotallyNotChase/intcode#readme>
 homepage:       https://github.com/TotallyNotChase/intcode#readme
 bug-reports:    https://github.com/TotallyNotChase/intcode/issues

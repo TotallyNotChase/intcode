@@ -50,8 +50,7 @@ The oobMem Map is still immutable - mostly because this doesn't need access a wh
 The sequence of inputs is provided by the user and is sent to the program sequentially, each time
 opcode 3 is executed. If user provided [4, 0, 1, 3] as input, the first time opcode 3 is encountered, input is 4
 next time, it is 0 and so on
-Once input runs out, outputs from the program itself are used as input - in the order they were outputted
-If that runs out as well, the program fails with an exception
+If inputs run out and an input instruction is encountered (opcode 3), the program fails with an exception
 
 The sequence of outputs is a record of all outputs, in order, outputted by the program - available to check
 to the user after runMachine succeeds
@@ -219,8 +218,7 @@ executeOp mach opGrp = do
                             <&> \m -> m { inps = Seq.drop 1 . inps $ m }
                     else
                         -- Store output into the outs sequence
-                        -- Also add it to the inps sequence - for use by opcode3 incase user provided inps runs out
-                        pure mach { outs = outs mach |> oprnd1, inps = inps mach |> oprnd1 }
+                        pure mach { outs = outs mach |> oprnd1 }
                 -- Return the new machine - after bumping up its instruction pointer
                 pure newMach { insPtr = 2 + insPtr newMach }
             | op `elem` [5, 6] -> do

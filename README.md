@@ -112,7 +112,7 @@ Takes a list of integers (the intcode puzzle input) and a list of inputs - retur
 
 The list of inputs should be sequential. That is, if the list was `[4, 5, 6, 7, 8]` - At the first input (opcode 3), the program is given 4, at the next one, it is given 5, then 6 and so on
 
-Once all inputs from this list runs out and the program encounters *another* input instruction (opcode 3) - it starts using *the outputs* as the input
+Once all inputs from this list runs out and the program encounters *another* input instruction (opcode 3) - it fails with an exception
 
 Consider `4, 0, 3, 1, 99` - where input list is `[]` (no input provided by user)
 * Encounter `4, 0` - output the value at index `0` - i.e `4`
