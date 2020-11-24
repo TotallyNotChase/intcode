@@ -1,10 +1,11 @@
 module STTest 
     ( testDay2
     , testDay5
+    , testDay7
     , testDay9
     ) where
 
-import Control.Monad (when)
+import Control.Monad (when, (>=>))
 import Control.Monad.ST (ST)
 import Data.Functor ((<&>))
 
@@ -15,7 +16,7 @@ import IntCode.ST
     , runMachine
     , readMem
     )
-import TestUtils (splitStrAt)
+import TestUtils (splitStrAt, runAmpsTillHalt)
 
 {-|
 Construct an IntCode machine from given comma
@@ -32,6 +33,18 @@ runTest inp inpSeq =
   where
       -- Convert the string into a list of ints
       inpl = map read . splitStrAt "," $ inp
+
+-- | Calculate final output given intcode list (puzzle input) and phase setting - for day 7
+finalAmpOutput :: String -> [Int] -> ST s Int
+finalAmpOutput inp phases =
+    sequence [constructMachine inpl [x] | x <- phases]
+        -- Run all the amps till they halt
+        >>= \ms -> runAmpsTillHalt (head ms) ms
+            -- Get the maximum output amongst all the machines' outputs (aka final output)
+            >>= mapM (getOutputs >=> pure . last) <&> maximum
+  where
+    -- Convert the string into a list of ints
+    inpl = map read . splitStrAt "," $ inp
 
 -- | Test the intcode on the problem from day2 of aoc2019
 testDay2 :: ST s ()
@@ -65,6 +78,23 @@ testDay5 = do
     -- The expected answers for my puzzle input
     outP1 = 11049715
     outP2 = 2140710
+
+-- | Test the intcode on the problem from day7 of aoc2019
+testDay7 :: ST s ()
+testDay7 = do
+    -- Run the test with part 1 and part 2 inputs
+    -- Part 1 should have phase set to [3, 1, 0, 2, 4]
+    res1 <- finalAmpOutput inp [3, 1, 0, 2, 4]
+    -- Part 2 should have phase set to [6, 5, 9, 8, 7]
+    res2 <- finalAmpOutput inp [6, 5, 9, 8, 7]
+    -- Verify the outputs
+    when (res1 /= outP1 || res2 /= outP2) $ error $ "testDay9 failed: Expected " ++ show (outP1, outP2) ++ " Got " ++ show (res1, res2)
+  where
+    -- The puzzle input I was given
+    inp = "3,8,1001,8,10,8,105,1,0,0,21,46,59,84,93,102,183,264,345,426,99999,3,9,1002,9,4,9,1001,9,3,9,102,2,9,9,1001,9,5,9,102,3,9,9,4,9,99,3,9,1002,9,3,9,101,4,9,9,4,9,99,3,9,1002,9,4,9,1001,9,4,9,102,2,9,9,1001,9,2,9,1002,9,3,9,4,9,99,3,9,1001,9,5,9,4,9,99,3,9,1002,9,4,9,4,9,99,3,9,101,2,9,9,4,9,3,9,102,2,9,9,4,9,3,9,1001,9,1,9,4,9,3,9,1001,9,1,9,4,9,3,9,1002,9,2,9,4,9,3,9,101,1,9,9,4,9,3,9,1001,9,2,9,4,9,3,9,102,2,9,9,4,9,3,9,1001,9,2,9,4,9,3,9,1002,9,2,9,4,9,99,3,9,101,1,9,9,4,9,3,9,102,2,9,9,4,9,3,9,1001,9,2,9,4,9,3,9,101,2,9,9,4,9,3,9,101,2,9,9,4,9,3,9,101,2,9,9,4,9,3,9,1002,9,2,9,4,9,3,9,101,2,9,9,4,9,3,9,1001,9,1,9,4,9,3,9,101,1,9,9,4,9,99,3,9,1002,9,2,9,4,9,3,9,1002,9,2,9,4,9,3,9,101,1,9,9,4,9,3,9,1002,9,2,9,4,9,3,9,101,2,9,9,4,9,3,9,1001,9,2,9,4,9,3,9,101,2,9,9,4,9,3,9,101,1,9,9,4,9,3,9,1002,9,2,9,4,9,3,9,102,2,9,9,4,9,99,3,9,102,2,9,9,4,9,3,9,102,2,9,9,4,9,3,9,1001,9,1,9,4,9,3,9,1001,9,1,9,4,9,3,9,101,1,9,9,4,9,3,9,102,2,9,9,4,9,3,9,102,2,9,9,4,9,3,9,1002,9,2,9,4,9,3,9,102,2,9,9,4,9,3,9,1001,9,1,9,4,9,99,3,9,101,1,9,9,4,9,3,9,1002,9,2,9,4,9,3,9,102,2,9,9,4,9,3,9,1002,9,2,9,4,9,3,9,101,1,9,9,4,9,3,9,101,1,9,9,4,9,3,9,1001,9,2,9,4,9,3,9,101,2,9,9,4,9,3,9,101,1,9,9,4,9,3,9,101,1,9,9,4,9,99"
+    -- The expected answers for my puzzle input
+    outP1 = 47064
+    outP2 = 4248984
 
 -- | Test the intcode on the problem from day5 of aoc2019
 testDay9 :: ST s ()

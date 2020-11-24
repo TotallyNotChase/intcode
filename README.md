@@ -261,17 +261,126 @@ solution inpl progInp = stToIO $
 
 No stdio interaction is necessary.
 
+## Day 7 solution (using `IntCode.ST`)
+This one is only reasonably doable using the `ST` version
+
+Before getting to the actual `solution`, some utility functions are required
+
+First, `scanlM`, which is just `scanl` for monadic actions
+```hs
+scanlM :: Monad m => (b -> a -> m b) -> b -> [a] -> m [b]
+scanlM _ q [] = pure [q]
+scanlM f q (x:xs) = f q x >>= flip (scanlM f) xs <&> (q:)
+```
+Then, a function that takes an `IntMachine` and runs it until it either it halts, or it encounters an input instruction (opcode 3) with no inputs left to feed in
+```hs
+import Control.Monad.ST (ST)
+import Data.Functor ((<&>))
+
+import IntCode.ST
+    ( addInput
+    , getOutputs
+    , readIns
+    , runIns
+    , viewInputs
+    , IntMachine
+    )
+
+{- | Run each instruction one by one and stop if
+an input instruction is encountered with no input
+left to use or if the machine has halted
+
+The mutated machine is returned
+-}
+runUntilInp :: IntMachine s -> ST s (IntMachine s)
+runUntilInp mach = do
+    -- Read the current instruction and parse out the opcode
+    (opcode, _, _, _) <- readIns mach
+    -- Check the input sequence of the machine
+    inps <- viewInputs mach
+    case (opcode, inps) of
+        -- Opcode is 3 (input instruction) but no inputs left to use, return
+        (3, []) -> pure mach
+        -- Run the current instruction and continue (unless machine has halted)
+        -- If machine has halted, return the machine
+        _ -> runIns mach >>= maybe (pure mach) runUntilInp
+```
+Now, a function that imitates the amplifier design. That is, start at the first amplifier machine - feed it 0 to get an output, feed that output to the next amp and so on. Notice the pattern? It's a fold, but the intermediate states (representing each amplifer's modified machine) should be preserved to return back. This is where `scanlM` comes in
+```hs
+{- | Run the list of machines (each machine representing an amplifier)
+`m` is the starting machine, which's last output is fed into the first amp
+the rest of the amps use the previous amp's output
+
+Which means this is essentially a fold, but all the intermediate states should be remembered
+to be returned as a new list of machines - that's a scanl
+Discard the first element though, that's just the starting element passed
+-}
+runAmps :: IntMachine s -> [IntMachine s] -> ST s [IntMachine s]
+runAmps m ms = tail <$> scanlM (\acc x -> getLastOutput acc >>= addInput x >>= runUntilInp) m ms
+    where
+        {- | Get the final output produced by given machine
+        If no output has been provided, use 0 (this will come into play for the very first amp run) -}
+        getLastOutput mach = getOutputs mach <&> \outs -> if null outs then 0 else last outs
+```
+Finally, a function that just runs `runAmps` till one of the machines halts
+```hs
+{- | Run all amps till one of them halts
+All of the machines in each amp is modified accordingly
+
+In the end, the final list of modified amps are returned
+
+The final output should be the greatest output amongst all of these
+machines
+-}
+runAmpsTillHalt :: IntMachine s -> [IntMachine s] -> ST s [IntMachine s]
+runAmpsTillHalt startMach machs =
+    -- Run all the amplifiers once
+    runAmps startMach machs
+    -- Read the current instruction of all the modified machines in the amplifiers
+    >>= \newMachs -> mapM readIns newMachs
+        >>= (\inss ->
+            -- Check if any of the machines has its instruction pointer set to 99 (aka has halted) 
+            if any (\(op, _, _, _) -> op == 99) inss
+            {- If none of them has halted, runAmpsTillHalt again, passing in the 
+            final amplifier machine as starting mach and the modified set of machines -}
+            then pure newMachs
+            -- Otherwise, return the set of machines at hand - signifying one of them has halted and the process is over
+            else runAmpsTillHalt (last newMachs) newMachs
+        )
+```
+
+So the final solution function would look like
+```hs
+solution :: [Int] -> [Int] -> ST s Int
+solution inpl phases =
+    sequence [constructMachine inpl [x] | x <- phases]
+        -- Run all the amps till they halt
+        >>= \ms -> runAmpsTillHalt (head ms) ms
+            -- Get the maximum output amongst all the machines' outputs (aka final output)
+            >>= mapM (getOutputs >=> pure . last) <&> maximum
+```
+`inpl` is the puzzle input as a list of ints, `phases` is the phase setting as a list of 5 ints, returned result is the final output with given phase setting
+
+To find the optimal phase setting, you can just run `solution` on all permutations of `[0, 1, 2, 3, 4]` (for day 1) and `[5, 6, 7, 8, 9]` (for day 2)
+
+```hs
+-- | Try multiple permutations of [0, 1, 2, 3, 4] phase setting to get the maximum final output
+optimalPhaseP1 :: [Int] -> ST s Int
+optimalPhaseP1 inpl = sequence [solution inpl phase | phase <- permutations [0, 1, 2, 3, 4]] <&> maximum
+
+-- | Try multiple permutations of [5, 6, 7, 8, 9] phase setting to get the maximum final output
+optimalPhaseP2 :: [Int]] -> ST s Int
+optimalPhaseP2 inpl = sequence [solution inpl phase | phase <- permutations [5, 6, 7, 8, 9]] <&> maximum
+```
+
 ## Day 9 solution
 ```hs
-solution :: [Char] -> IO ()
-solution inpstr = void $
+solution :: [Int] -> IO ()
+solution inpl = void $
     -- Construct the mutable IntCode array 
     constructMachine inpl
     -- Run the machine
     >>= runMachine
-  where
-    -- Convert the string into a list of ints
-    inpl = map read . splitStrAt "," $ inpstr
 ```
 Same as day 5 - this time the part 1 input is 1 and part 2 input is 2 - the result will be printed in stdout
 
