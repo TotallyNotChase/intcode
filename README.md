@@ -38,7 +38,7 @@ constructMachine [1, 1, 1, 4, 99, 5, 6, 0, 99]
 ## `readIns :: IntMachine s -> IO (Int, Int, Int, Int)`
 Takes an intcode machine and reads the instruction currently pointed by the instruction pointer
 
-The instruction is then parsed into a tuple of structure ()
+The instruction is then parsed into a tuple of structure (opcode, operand 1 mode, operand 2 mode, operand 3 mode)
 
 If the instruction pointer pointed to the value of 1002, `readIns` will return (2, 0, 1, 0)
 
@@ -114,11 +114,11 @@ The list of inputs should be sequential. That is, if the list was `[4, 5, 6, 7, 
 
 Once all inputs from this list runs out and the program encounters *another* input instruction (opcode 3) - it fails with an exception
 
-Consider `4, 0, 3, 1, 99` - where input list is `[]` (no input provided by user)
+Consider `4, 0, 3, 1, 99` - where input list is `[1]`
 * Encounter `4, 0` - output the value at index `0` - i.e `4`
-  This value is appended (right side) to the output sequence (`outs`) **and** the `inps` sequence
+  This value is appended (right side) to the output sequence (`outs`)
 * Encounter `3, 0` - read input from `inps` and store it at index `0`
-  The leftmost value from `inps` is popped off from the sequence and used for the input
+  The leftmost value from `inps` is popped off from the sequence and used for the input, in this case thats 1
 
 If at any point, `inps` is an empty sequence during the input instruction (opcode 3) - the machine halts with an exception
 ```hs
@@ -161,7 +161,7 @@ constructMachine [3, 9, 8, 9, 10, 9, 4, 9, 99, -1, 8] [8] >>= runMachine >>= get
 ## `readIns :: IntMachine s -> ST s (Int, Int, Int, Int)`
 Takes an intcode machine and reads the instruction currently pointed by the instruction pointer
 
-The instruction is then parsed into a tuple of structure ()
+The instruction is then parsed into a tuple of structure (opcode, operand 1 mode, operand 2 mode, operand 3 mode)
 
 If the instruction pointer pointed to the value of 1002, `readIns` will return (2, 0, 1, 0)
 
